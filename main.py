@@ -4,11 +4,88 @@ import time
 import math
 from timeit import default_timer as timer
 
-# This function takes last element as pivot, places 
-# the pivot element at its correct position in sorted 
-# array, and places all smaller (smaller than pivot) 
-# to left of pivot and all greater elements to right 
-# of pivot 
+minProcessTime = 3 # secs
+numMeasureSamples = 10
+
+
+def polyError(x, y, coeffs):
+    poly =  np.zeros(len(x))
+    for i in range(0, len(coeffs)):
+        poly = poly + coeffs[coeffs.shape[0]-1 - i]*np.power(x, i)
+
+    return np.sum((poly - y)**2)
+
+def buildPolynomialData(func, maxDatasetSize, degree):
+
+    x, t = measure(func, 0, maxDatasetSize, int(maxDatasetSize / numMeasureSamples))
+    x = np.array(x)
+    print(x, t)
+    A = np.ones(len(x))
+    A = np.c_[x, A]
+    for i in range(2, degree+1):
+        A = np.c_[np.power(x, i), A]
+        print(A, A.shape)
+ 
+    coefficients = np.linalg.lstsq(A, t, rcond=None)[0]
+    poly =  np.zeros(len(x))
+    for i in range(0, len(coefficients)):
+        poly = poly + coefficients[coefficients.shape[0]-1 - i]*np.power(x, i)
+
+    e = polyError(x, t, coefficients)
+    print('total error^2 = ', e)
+
+    _ = plt.plot(x, t, 'o', label='Original data', markersize=3)
+    _ = plt.plot(x, poly, 'r', label='Fitted line')
+    _ = plt.legend()
+
+def buildN2Data(func, maxDatasetSize):
+    return buildPolynomialData(func, 2)
+
+def buildN3Data(func, maxDatasetSize):
+    return buildPolynomialData(func, 3)
+
+def buildNLogNData(func, maxDatasetSize):
+    x, t = measure(func, 1, maxDatasetSize, int(maxDatasetSize / numMeasureSamples))
+    x = np.array(x)
+    print(x, t)
+    A = np.ones(len(x))
+
+    A = np.c_[x*np.log(x), A]
+    print(A, A.shape)
+ 
+    coefficients = np.linalg.lstsq(A, t, rcond=None)[0]
+    print('>>>> COEFFS', coefficients)
+    curve = coefficients[0]*x*np.log(x) + coefficients[1]
+    print('>>> CURVE = ', curve)
+    e = np.sum((curve - t)**2)
+    print('total error^2 = ', e)
+
+    _ = plt.plot(x, t, 'o', label='Original data', markersize=3)
+    _ = plt.plot(x, curve, 'r', label='Fitted line')
+    _ = plt.legend()
+
+def buildLinearData(func, maxDatasetSize):
+    pass
+
+functions = [
+    {
+        'func': buildLinearData,
+        'label': 'O(N)'
+    },
+    {
+        'func': buildNLogNData,
+        'label': 'O(NLogN)'
+    },
+    {
+        'func': buildN2Data,
+        'label': 'O(N^2)'
+    },
+    {
+        'func': buildN3Data,
+        'label': 'O(N^3)'
+    },
+]
+
 def partition(arr,low,high): 
     i = ( low-1 )         # index of smaller element 
     pivot = arr[high]     # pivot 
@@ -39,43 +116,6 @@ def quickSort(arr,low,high):
         quickSort(arr, low, pi-1) 
         quickSort(arr, pi+1, high) 
 
-# def buildPolynomialData(x, degree):
-#     pass
-
-# def buildN2Data(x):
-#     return buildPolynomialData(x, 2)
-
-# def buildN3Data(x):
-#     return buildPolynomialData(x, 3)
-
-# def buildN4Data(x):
-#     return buildPolynomialData(x, 4)
-
-# def buildLogNData(x):
-#     pass
-
-# def buildLinearData(x):
-#     pass
-
-# functions = [{
-#     'func': buildPolynomialData,
-#     'label': 'O(N^2)'
-# }]
-
-# x = np.array([0, 2, 3, 4, 5, 6])
-# y = np.array([0, x[1]**3, x[2]**3, x[3]**3, x[4]**3, x[5]**3])
-# print(x)
-# A = np.vstack([np.power(x,2)]).T
-# print(A, A.shape)
-
-# print(np.power(A[:,0],2))
-# A = np.c_[A, x]
-# A = np.c_[A, np.ones(A.shape[0])]
-# print(A, A.shape)
-
-# m, b, c = np.linalg.lstsq(A, y, rcond=None)[0]
-# print(m, b, c)
-
 def myFuncN2(v):
     result = []
     a = 1
@@ -98,7 +138,7 @@ def myFuncN(v):
 
 def myFuncNLogN(v):
     result = v.tolist()
-    quickSort(result, 0, len(result)-1)
+    result.sort()
 
 def measureFunc(func, v):
     start = time.process_time()
@@ -119,30 +159,24 @@ def measure(func, fr, to, inc):
     t = []
     x = []
     for i in range(fr, to, inc):
-        print('measure', i)
+        print('..', i)
         x.append(i)
 
-        avg = measureAvg(func, i, dataFunctor, 20)
+        avg = measureAvg(func, i, dataFunctor, 5)
         t.append(avg)
 
-    print('finished measuring', x, t)
-    _ = plt.plot(x, t, 'o', label='OMeasure', markersize=2)
-# _ = plt.plot(x, x*x, 'r', label='Fitted line N2')
-# _ = plt.plot(x, x*x*x, 'g', label='Fitted line N3')
-# _ = plt.legend()
+    return (x, t)
 
 def findMaxDatasetSize(func, desiredWaitTime):
     # determines the dataset size for keeping process runtime at about 10 seconds
     datasetSize = 1000
     avgTime = 0
     while avgTime < desiredWaitTime:
-        print('trying size = ', datasetSize)
         avgTime = measureAvg(func, datasetSize, dataFunctor, 2)
-        print('found time = ', avgTime, 'for size = ', datasetSize)
         if avgTime >= desiredWaitTime:
             break
         error = desiredWaitTime - avgTime
-        datasetSize = int(datasetSize * (1 + 0.25 * error))
+        datasetSize = int(datasetSize * (1 + 0.35 * error))
     
     return (avgTime, datasetSize)
 
@@ -154,4 +188,10 @@ def findMaxDatasetSize(func, desiredWaitTime):
 #measure(myFuncN, 0, 150000, 10000)
 #plt.show()
 
-print('data set for N2', findMaxDatasetSize(myFuncN2, 4))
+avgTime, datasetSize = findMaxDatasetSize(myFuncN, minProcessTime)
+print('found dataset size = ', avgTime, datasetSize)
+buildNLogNData(myFuncN, datasetSize)
+buildPolynomialData(myFuncN, datasetSize, 1)
+buildPolynomialData(myFuncN, datasetSize, 2)
+
+plt.show()
