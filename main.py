@@ -4,9 +4,8 @@ import time
 import math
 from timeit import default_timer as timer
 
-minProcessTime = 3 # secs
-numMeasureSamples = 10
-
+minProcessTime = 6 # secs
+numMeasureSamples = 6
 
 def polyError(x, y, coeffs):
     poly =  np.zeros(len(x))
@@ -15,59 +14,56 @@ def polyError(x, y, coeffs):
 
     return np.sum((poly - y)**2)
 
-def buildPolynomialData(func, maxDatasetSize, degree):
+def buildPolynomialData(x, y, maxDatasetSize, degree):
+    A = np.zeros(len(x))
+    for i in range(1, degree):
+        A = np.c_[np.zeros(len(x)), A]
+    
+    A = np.c_[np.power(x, degree), A]
+    print('A', A)
+    
+    coefficients = np.linalg.lstsq(A, y, rcond=None)[0]
+    poly = coefficients[0]*np.power(x, degree)
 
-    x, t = measure(func, 0, maxDatasetSize, int(maxDatasetSize / numMeasureSamples))
-    x = np.array(x)
-    print(x, t)
+    _ = plt.plot(x, y, 'o', label='Original data', markersize=3)
+    _ = plt.plot(x, poly, label='Fitted line for N^' + str(degree))
+    _ = plt.legend()
+
+    return polyError(x, y, coefficients)
+
+def buildN2Data(x, y, maxDatasetSize):
+    return buildPolynomialData(x, y, maxDatasetSize, 2)
+
+def buildN3Data(x, y, maxDatasetSize):
+    return buildPolynomialData(x, y, maxDatasetSize, 3)
+
+def buildNLogNData(x, y, maxDatasetSize):
     A = np.ones(len(x))
-    A = np.c_[x, A]
-    for i in range(2, degree+1):
-        A = np.c_[np.power(x, i), A]
-        print(A, A.shape)
- 
-    coefficients = np.linalg.lstsq(A, t, rcond=None)[0]
+    A = np.c_[x*np.log(x), A]
+    print('A', A)
+    coefficients = np.linalg.lstsq(A, y, rcond=None)[0]
+    curve = coefficients[0]*x*np.log(x+1) + coefficients[1]
+    return np.sum((curve - y)**2)
+
+def buildLinearData(x, y, maxDatasetSize):
+    return buildPolynomialData(x, y, maxDatasetSize, 1)
+
+def buildConstantData(x, y, maxDatasetSize):
+    A = np.zeros(len(x))
+    A = np.c_[np.ones(len(x)), A]
+
+    coefficients = np.linalg.lstsq(A, y, rcond=None)[0]
     poly =  np.zeros(len(x))
     for i in range(0, len(coefficients)):
         poly = poly + coefficients[coefficients.shape[0]-1 - i]*np.power(x, i)
 
-    e = polyError(x, t, coefficients)
-    print('total error^2 = ', e)
-
-    _ = plt.plot(x, t, 'o', label='Original data', markersize=3)
-    _ = plt.plot(x, poly, 'r', label='Fitted line')
-    _ = plt.legend()
-
-def buildN2Data(func, maxDatasetSize):
-    return buildPolynomialData(func, 2)
-
-def buildN3Data(func, maxDatasetSize):
-    return buildPolynomialData(func, 3)
-
-def buildNLogNData(func, maxDatasetSize):
-    x, t = measure(func, 1, maxDatasetSize, int(maxDatasetSize / numMeasureSamples))
-    x = np.array(x)
-    print(x, t)
-    A = np.ones(len(x))
-
-    A = np.c_[x*np.log(x), A]
-    print(A, A.shape)
- 
-    coefficients = np.linalg.lstsq(A, t, rcond=None)[0]
-    print('>>>> COEFFS', coefficients)
-    curve = coefficients[0]*x*np.log(x) + coefficients[1]
-    print('>>> CURVE = ', curve)
-    e = np.sum((curve - t)**2)
-    print('total error^2 = ', e)
-
-    _ = plt.plot(x, t, 'o', label='Original data', markersize=3)
-    _ = plt.plot(x, curve, 'r', label='Fitted line')
-    _ = plt.legend()
-
-def buildLinearData(func, maxDatasetSize):
-    pass
+    return polyError(x, y, coefficients)
 
 functions = [
+    {
+        'func': buildConstantData,
+        'label': 'O(1)'
+    },
     {
         'func': buildLinearData,
         'label': 'O(N)'
@@ -85,36 +81,6 @@ functions = [
         'label': 'O(N^3)'
     },
 ]
-
-def partition(arr,low,high): 
-    i = ( low-1 )         # index of smaller element 
-    pivot = arr[high]     # pivot 
-  
-    for j in range(low , high): 
-  
-        # If current element is smaller than or 
-        # equal to pivot 
-        if   arr[j] <= pivot: 
-          
-            # increment index of smaller element 
-            i = i+1 
-            arr[i],arr[j] = arr[j],arr[i] 
-  
-    arr[i+1],arr[high] = arr[high],arr[i+1] 
-    return ( i+1 ) 
-  
-# Function to do Quick sort 
-def quickSort(arr,low,high): 
-    if low < high: 
-  
-        # pi is partitioning index, arr[p] is now 
-        # at right place 
-        pi = partition(arr,low,high) 
-  
-        # Separately sort elements before 
-        # partition and after partition 
-        quickSort(arr, low, pi-1) 
-        quickSort(arr, pi+1, high) 
 
 def myFuncN2(v):
     result = []
@@ -135,6 +101,15 @@ def myFuncN(v):
         result.append(a)
 
     return result
+
+def myFuncN3(v):
+    result = []
+    a = 1
+    for i in range(0,len(v)):
+        myFuncN2(v)
+
+    return result
+
 
 def myFuncNLogN(v):
     result = v.tolist()
@@ -162,14 +137,14 @@ def measure(func, fr, to, inc):
         print('..', i)
         x.append(i)
 
-        avg = measureAvg(func, i, dataFunctor, 5)
+        avg = measureAvg(func, i, dataFunctor, 1)
         t.append(avg)
 
     return (x, t)
 
 def findMaxDatasetSize(func, desiredWaitTime):
     # determines the dataset size for keeping process runtime at about 10 seconds
-    datasetSize = 1000
+    datasetSize = 100
     avgTime = 0
     while avgTime < desiredWaitTime:
         avgTime = measureAvg(func, datasetSize, dataFunctor, 2)
@@ -181,17 +156,24 @@ def findMaxDatasetSize(func, desiredWaitTime):
     return (avgTime, datasetSize)
 
 
-#measure(myFuncN2, 0, 1000, 100)
+def findBigO(func):
+    avgTime, datasetSize = findMaxDatasetSize(func, minProcessTime)
 
-#measure(myFuncNLogN, 0, 15000, 1000)
+    x, t = measure(func, 1, datasetSize, int(datasetSize / numMeasureSamples))
+    x = np.array(x)
 
-#measure(myFuncN, 0, 150000, 10000)
-#plt.show()
+    minError = 100000
+    minFunc = None
 
-avgTime, datasetSize = findMaxDatasetSize(myFuncN, minProcessTime)
-print('found dataset size = ', avgTime, datasetSize)
-buildNLogNData(myFuncN, datasetSize)
-buildPolynomialData(myFuncN, datasetSize, 1)
-buildPolynomialData(myFuncN, datasetSize, 2)
+    for f in functions:
+        error = f['func'](x, t, datasetSize)
+        if error < minError:
+            minError = error
+            minFunc = f
+        
+    if minFunc is not None:
+        print('Function is ', minFunc['label'], 'with error', minError)
+
+findBigO(myFuncN3)
 
 plt.show()
