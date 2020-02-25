@@ -73,6 +73,14 @@ functions = [
     },
 ]
 
+def myFuncN2plusM(v, w):
+    result = []
+    a = 1
+    myFuncN2(v, w)
+    myFuncN(w, v)
+
+    return result
+
 def myFuncNplusM(v, w):
     result = []
     a = 1
@@ -185,7 +193,7 @@ def findBigO_UV(func, dataFunc1, dataFunc2):
     if isConstant:
         minFuncU = functions[0]
     else:
-        x, t = measure(func, dataFunctor, identityDataFunctor, 1, datasetSizeU, int(datasetSizeU / numMeasureSamples))
+        x, t = measure(func, dataFunc1, dataFunc2, 1, datasetSizeU, int(datasetSizeU / numMeasureSamples))
         x = np.array(x)
 
         for f in functions:
@@ -222,13 +230,13 @@ def findBigO(func):
     minFunc, isConstant = findBigO_UV(func, dataFunctor, dataFunctor)    
     if minFunc is not None:
         if isConstant:
-            print('Function does not depende on neight U nor V')
+            print('Function does not depend on neight U nor V')
         else:
-            if minFunc['label'].format('N') == 'O(N)':
+            if minFunc == minFuncU or minFuncU == minFuncV:
                 print('Function is combined U and V', minFuncU['label'].format('U'), '+', minFuncV['label'].format('V'))
             else:
                 print('Function is combined U and V', minFuncU['label'].format('U'), '*', minFuncV['label'].format('V'))
 
 start = time.time()
-findBigO(myFuncNplusM)
+findBigO(myFuncN2plusM)
 print('>>> proccess took', time.time() - start, 'seconds')
