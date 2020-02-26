@@ -4,8 +4,7 @@ import time
 import math
 from timeit import default_timer as timer
 
-minProcessTime = 5 # secs
-numMeasureSamples = 6
+minProcessTime = 10 # secs
 
 def polyError(x, y, coeffs):
     poly =  np.zeros(len(x))
@@ -81,6 +80,14 @@ def myFuncN2plusM(v, w):
 
     return result
 
+def myFuncN2plusM2(v, w):
+    result = []
+    a = 1
+    myFuncN2(v, w)
+    myFuncN2(w, v)
+
+    return result
+
 def myFuncNplusM(v, w):
     result = []
     a = 1
@@ -122,6 +129,26 @@ def myFuncN3(v, w):
 
     return result
 
+def myFuncN_N(n):
+    a = 1
+    for i in range(0,n):
+
+        a = a + i*i*i*i
+
+
+def myFuncN_N2(n):
+    a = 1
+    for i in range(0,n):
+        for i in range(0,n):
+            a = a + i*i*i*i
+
+
+def myFuncN_NLogN(n):
+    a = 1
+    v = dataFunctor(n)
+    v.sort()
+
+
 def myFuncNLogN(v, w):
     v.sort()
 
@@ -135,6 +162,18 @@ def measureAvg(func, dataSetSize, dataFunc1, dataFunc2, numSamples):
     avg = 0
     for i in range(0, numSamples):
         avg = avg + measureFunc(func, dataFunc1(dataSetSize), dataFunc2(dataSetSize))
+    return avg / numSamples
+
+def measureFunc_N(func, n):
+    start = time.process_time()
+    func(n)
+    end = time.process_time()
+    return end - start
+
+def measureAvg_N(func, n, numSamples):
+    avg = 0
+    for i in range(0, numSamples):
+        avg = avg + measureFunc_N(func, n)
     return avg / numSamples
 
 def dataFunctor(size):
@@ -155,23 +194,63 @@ def measure(func, dataFunc1, dataFunc2, fr, to, inc):
 
     return (x, t)
 
+def measure_N(func, fr, to, inc):
+    t = []
+    x = []
+    for i in range(fr, to, inc):
+        x.append(i)
+
+        avg = measureAvg_N(func, i, 1)
+        t.append(avg)
+
+    return (x, t)
+
+
 def findMaxDatasetSize(func, dataFunc1, dataFunc2, desiredWaitTime):
     # determines the dataset size for keeping process runtime at about 10 seconds
-    datasetSize = 100
+    datasetSize = 10
     avgTime = 0
-    prev3 = []
+    error = 0
+    x = []
+    t = []
     while avgTime < desiredWaitTime:
         avgTime = measureAvg(func, datasetSize, dataFunc1, dataFunc2, 2)
         if avgTime >= desiredWaitTime:
             break
-        prev3.append(avgTime)
-        if len(prev3) == 3:
-            if all(abs(p-prev3[0]) < 1e-5 for p in prev3):
-                return (avgTime, 1, True)
+        t.append(avgTime)
+        x.append(datasetSize)
+        if len(t) >= 10:
+            # check if all previous 3 readings are the same
+            if all(abs(p-t[0]) < 1e-4 for p in t[:5]):
+                return (avgTime, 1, x, t, True)
+
         error = desiredWaitTime - avgTime
-        datasetSize = int(datasetSize * (1 + 0.35 * error))
-    
-    return (avgTime, datasetSize, False)
+        datasetSize = int(datasetSize * (1+0.5*error))
+
+    return (avgTime, datasetSize, x, t, False)
+
+def findMaxNSize(func, desiredWaitTime):
+    # determines the dataset size for keeping process runtime at about 10 seconds
+    Nsize = 10
+    avgTime = 0
+    error = 0
+    x = []
+    t = []
+    while avgTime < desiredWaitTime:
+        avgTime = measureAvg_N(func, Nsize, 2)
+        if avgTime >= desiredWaitTime:
+            break
+        t.append(avgTime)
+        x.append(Nsize)
+        if len(t) >= 10:
+            # check if all previous 3 readings are the same
+            if all(abs(p-t[0]) < 1e-5 for p in t[:5]):
+                return (avgTime, 1, x, t, True)
+
+        error = desiredWaitTime - avgTime
+        Nsize = int(Nsize * (1+0.5*error))
+
+    return (avgTime, Nsize, x, t, False)
 
 def printBigO(bigOFunc, varName, isConstant):
     if bigOFunc is not None:
@@ -183,16 +262,12 @@ def printBigO(bigOFunc, varName, isConstant):
         print('Could not estimate U variable complexity ...')
 
 def findBigO_UV(func, dataFunc1, dataFunc2):
-    print('estimating good dataset size ...')
-    avgTime, datasetSizeU, isConstant = findMaxDatasetSize(func, dataFunc1, dataFunc2, minProcessTime)
-    print('found dataset size of', datasetSizeU)
+    avgTime, datasetSizeU, x, t, isConstant = findMaxDatasetSize(func, dataFunc1, dataFunc2, minProcessTime)
     minError = 100000
     minFuncU = None
-    x, t = [], []
     if isConstant:
         minFuncU = functions[0]
     else:
-        x, t = measure(func, dataFunc1, dataFunc2, 1, datasetSizeU, int(datasetSizeU / numMeasureSamples))
         x = np.array(x)
 
         for f in functions:
@@ -203,6 +278,31 @@ def findBigO_UV(func, dataFunc1, dataFunc2):
         
     return (minFuncU, isConstant)
 
+def findBigO_N(func):
+    avgTime, Nsize, x, t, isConstant = findMaxNSize(func, minProcessTime)
+    print('Nsize', Nsize)
+    minError = 100000
+    minFuncU = None
+    if isConstant:
+        minFuncU = functions[0]
+    else:
+        x = np.array(x)
+
+        for f in functions:
+            error = f['func'](x, t, Nsize)
+            if error < minError:
+                minError = error
+                minFuncU = f
+
+    
+    result = 'N/A'
+    if minFuncU is not None:
+        if isConstant:
+            result = 'O(1)'
+        else:
+           result = minFuncU['label'].format('N')
+    return result
+
 def findBigO(func):
     
     result = 'N/A'
@@ -212,13 +312,14 @@ def findBigO(func):
     if minFuncU == None or minFuncV == None:
         return result
 
-    minFunc, isConstant = findBigO_UV(func, dataFunctor, dataFunctor)    
+    minFunc, isConstant = findBigO_UV(func, dataFunctor, dataFunctor)  
+ 
     if minFunc is not None:
         if isConstant:
             result = 'O(1)'
         else:
             result = '{first} {{op}} {second}'.format(first=minFuncU['label'].format('U'), second=minFuncV['label'].format('V'))
-            if minFunc == minFuncU or minFuncU == minFuncV:
+            if minFunc == minFuncU or minFunc == minFuncV:
                 result = result.format(op='+')
             else:
                 result = result.format(op='*')
@@ -226,7 +327,7 @@ def findBigO(func):
     return result
 
 
-def test(name, func, expected):
+def test_UV(name, func, expected):
     start = time.time()
     print('*** starting test', name)
     result = findBigO(func)
@@ -234,9 +335,26 @@ def test(name, func, expected):
     print('FAIL' if fail else 'PASSED', ':', name, 'result:', result, 'expected', expected)
     print('*** proccess took', time.time() - start, 'seconds')
 
-test('N plus M', myFuncNplusM, 'O(U) + O(V)')
-test('N2 plus M', myFuncN2plusM, 'O(U^2) + O(V)')
-test('NLogN', myFuncNLogN, 'O(ULogU) + O(1)')
-test('N', myFuncN, 'O(U) + O(1)')
-test('N2', myFuncN2, 'O(U^2) + O(1)')
-test('N3', myFuncN3, 'O(U) + O(V^2)')
+def test_N(name, func, expected):
+    start = time.time()
+    print('*** starting test', name)
+    result = findBigO_N(func)
+    fail = result != expected
+    print('FAIL' if fail else 'PASSED', ':', name, 'result:', result, 'expected', expected)
+    print('*** proccess took', time.time() - start, 'seconds')
+
+test_N('test', myFuncN_NLogN, 'O(NLogN)')
+test_N('test', myFuncN_N, 'O(N)')
+test_N('test', myFuncN_N2, 'O(N^2)')
+
+# for i in range(0, 30):
+#     print('** running test sets', i)
+#     test('N plus M', myFuncNplusM, 'O(U) + O(V)')
+#     test('N2 plus M', myFuncN2plusM, 'O(U^2) + O(V)')
+#     test('N2 plus M2', myFuncN2plusM2, 'O(U^2) + O(V^2)')
+#     test('NLogN', myFuncNLogN, 'O(ULogU) + O(1)')
+#     test('N', myFuncN, 'O(U) + O(1)')
+#     test('N2', myFuncN2, 'O(U^2) + O(1)')
+#     test('N3', myFuncN3, 'O(U) * O(V^2)')
+#     print('** end running test sets', i)
+
