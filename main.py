@@ -4,8 +4,8 @@ import time
 import math
 from timeit import default_timer as timer
 
-minProcessTime = 6 # secs
-numMeasureSamples = 8
+minProcessTime = 5 # secs
+numMeasureSamples = 6
 
 def polyError(x, y, coeffs):
     poly =  np.zeros(len(x))
@@ -123,8 +123,7 @@ def myFuncN3(v, w):
     return result
 
 def myFuncNLogN(v, w):
-    result = v.tolist()
-    result.sort()
+    v.sort()
 
 def measureFunc(func, v, w):
     start = time.process_time()
@@ -206,37 +205,38 @@ def findBigO_UV(func, dataFunc1, dataFunc2):
 
 def findBigO(func):
     
+    result = 'N/A'
     minFuncU, isConstant = findBigO_UV(func, dataFunctor, identityDataFunctor) 
-    if minFuncU is not None:
-        if isConstant:
-            print('Function is in U,', minFuncU['label'])
-        else:
-            print('Function is in U,', minFuncU['label'].format('U'))
-    else:
-        print('Could not estimate U variable complexity ...')
-
     minFuncV, isConstant = findBigO_UV(func, identityDataFunctor, dataFunctor)    
-    if minFuncV is not None:
-        if isConstant:
-            print('Function is in V,', minFuncV['label'])
-        else:
-            print('Function is in V,', minFuncV['label'].format('V'))
-    else:
-        print('Could not estimate V variable complexity ...')
-
+   
     if minFuncU == None or minFuncV == None:
-        return
+        return result
 
     minFunc, isConstant = findBigO_UV(func, dataFunctor, dataFunctor)    
     if minFunc is not None:
         if isConstant:
-            print('Function does not depend on neight U nor V')
+            result = 'O(1)'
         else:
+            result = '{first} {{op}} {second}'.format(first=minFuncU['label'].format('U'), second=minFuncV['label'].format('V'))
             if minFunc == minFuncU or minFuncU == minFuncV:
-                print('Function is combined U and V', minFuncU['label'].format('U'), '+', minFuncV['label'].format('V'))
+                result = result.format(op='+')
             else:
-                print('Function is combined U and V', minFuncU['label'].format('U'), '*', minFuncV['label'].format('V'))
+                result = result.format(op='*')
 
-start = time.time()
-findBigO(myFuncN2plusM)
-print('>>> proccess took', time.time() - start, 'seconds')
+    return result
+
+
+def test(name, func, expected):
+    start = time.time()
+    print('*** starting test', name)
+    result = findBigO(func)
+    fail = result != expected
+    print('FAIL' if fail else 'PASSED', ':', name, 'result:', result, 'expected', expected)
+    print('*** proccess took', time.time() - start, 'seconds')
+
+test('N plus M', myFuncNplusM, 'O(U) + O(V)')
+test('N2 plus M', myFuncN2plusM, 'O(U^2) + O(V)')
+test('NLogN', myFuncNLogN, 'O(ULogU) + O(1)')
+test('N', myFuncN, 'O(U) + O(1)')
+test('N2', myFuncN2, 'O(U^2) + O(1)')
+test('N3', myFuncN3, 'O(U) + O(V^2)')
